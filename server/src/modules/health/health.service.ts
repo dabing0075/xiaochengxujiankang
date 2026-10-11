@@ -7,18 +7,19 @@ export class HealthService {
    * 获取健康指标
    * 始终从最新的打卡记录计算BMI和体脂率，确保数据一致性
    */
-  async getHealthMetrics() {
+  async getHealthMetrics(userId: string) {
     const client = getSupabaseClient()
-    
-    // 获取用户信息（假设只有一个用户）
+
+    // 获取当前登录用户
     const { data: users, error: userError } = await client
       .from('users')
       .select('*')
-      .limit(1)
-    
+      .eq('id', userId)
+      .maybeSingle()
+
     if (userError) throw new Error(`获取用户信息失败: ${userError.message}`)
-    
-    const user = users?.[0]
+
+    const user = users
     if (!user) {
       // 如果没有用户，返回默认值
       return {
@@ -39,6 +40,7 @@ export class HealthService {
     const { data: todayRecords, error: todayError } = await client
       .from('weight_records')
       .select('id')
+      .eq('user_id', userId)
       .eq('record_date', today)
       .limit(1)
     
@@ -50,6 +52,7 @@ export class HealthService {
     const { data: records, error: recordError } = await client
       .from('weight_records')
       .select('*')
+      .eq('user_id', userId)
       .order('record_date', { ascending: false })
       .limit(1)
     
@@ -278,7 +281,7 @@ export class HealthService {
    * 获取趋势数据（体重 + 腰围）
    * @param days 天数
    */
-  async getTrendData(days: number) {
+  async getTrendData(userId: string, days: number) {
     const client = getSupabaseClient()
     
     // 计算起始日期
@@ -295,6 +298,7 @@ export class HealthService {
     const { data: records, error } = await client
       .from('weight_records')
       .select('record_date, weight, waist')
+      .eq('user_id', userId)
       .gte('record_date', startDateStr)
       .lte('record_date', endDateStr)
       .order('record_date', { ascending: true })
@@ -456,13 +460,14 @@ export class HealthService {
   /**
    * 获取健康统计数据
    */
-  async getHealthStats() {
+  async getHealthStats(userId: string) {
     const client = getSupabaseClient()
-    
-    // 获取所有记录
+
+    // 获取当前用户的所有记录
     const { data: records, error } = await client
       .from('weight_records')
       .select('*')
+      .eq('user_id', userId)
       .order('record_date', { ascending: false })
     
     if (error) throw new Error(`获取记录失败: ${error.message}`)
@@ -476,13 +481,14 @@ export class HealthService {
       }
     }
 
-    // 获取用户信息
+    // 获取当前登录用户
     const { data: users } = await client
       .from('users')
       .select('*')
-      .limit(1)
-    
-    const user = users?.[0]
+      .eq('id', userId)
+      .maybeSingle()
+
+    const user = users
 
     // 计算体重统计
     const weights = records.map(r => r.weight).filter(w => w !== null)
@@ -675,18 +681,19 @@ export class HealthService {
    * @param weeklyGoal 每周减重目标（kg）
    * @param activityLevel 活动水平
    */
-  async calculateWeightPlan(weeklyGoal: number, activityLevel: string) {
+  async calculateWeightPlan(userId: string, weeklyGoal: number, activityLevel: string) {
     const client = getSupabaseClient()
-    
-    // 获取用户信息
+
+    // 获取当前登录用户
     const { data: users, error: userError } = await client
       .from('users')
       .select('*')
-      .limit(1)
-    
+      .eq('id', userId)
+      .maybeSingle()
+
     if (userError) throw new Error(`获取用户信息失败: ${userError.message}`)
-    
-    const user = users?.[0]
+
+    const user = users
     if (!user) {
       throw new Error('请先完善个人信息')
     }
@@ -695,6 +702,7 @@ export class HealthService {
     const { data: latestRecord } = await client
       .from('weight_records')
       .select('weight')
+      .eq('user_id', userId)
       .order('record_date', { ascending: false })
       .limit(1)
     
@@ -803,18 +811,19 @@ export class HealthService {
   /**
    * 获取身体数据对比（第一条记录 vs 最新记录）
    */
-  async getBodyDataComparison() {
+  async getBodyDataComparison(userId: string) {
     const client = getSupabaseClient()
-    
-    // 获取用户信息
+
+    // 获取当前登录用户
     const { data: users, error: userError } = await client
       .from('users')
       .select('*')
-      .limit(1)
-    
+      .eq('id', userId)
+      .maybeSingle()
+
     if (userError) throw new Error(`获取用户信息失败: ${userError.message}`)
-    
-    const user = users?.[0]
+
+    const user = users
     if (!user) {
       throw new Error('请先完善个人信息')
     }
@@ -823,10 +832,11 @@ export class HealthService {
     const gender = user.gender || 'male'
     const age = this.calculateAge(user.birth_date)
 
-    // 获取所有打卡记录，按日期排序
+    // 获取当前用户所有打卡记录，按日期排序
     const { data: records, error: recordsError } = await client
       .from('weight_records')
       .select('*')
+      .eq('user_id', userId)
       .order('record_date', { ascending: true })
     
     if (recordsError) throw new Error(`获取打卡记录失败: ${recordsError.message}`)

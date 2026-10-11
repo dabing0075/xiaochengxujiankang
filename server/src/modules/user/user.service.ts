@@ -6,7 +6,7 @@ import { UpdateUserDto } from './dto/update-user.dto'
 function calculateHealthMetrics(weight: number, waist: number, height: number, gender: string, age: number) {
   // BMI = 体重 / 身高^2
   const bmi = weight && height ? Math.round((weight / Math.pow(height / 100, 2)) * 10) / 10 : 0
-  
+
   // 体脂率计算（根据性别）
   let bodyFatRate = 0
   if (weight && height && waist && gender) {
@@ -18,7 +18,7 @@ function calculateHealthMetrics(weight: number, waist: number, height: number, g
       bodyFatRate = Math.round((1.2 * bmi + 0.23 * age - 5.4) * 10) / 10
     }
   }
-  
+
   // 健康等级判定
   let bmiLevel = ''
   if (bmi > 0) {
@@ -27,7 +27,7 @@ function calculateHealthMetrics(weight: number, waist: number, height: number, g
     else if (bmi < 28) bmiLevel = '超重'
     else bmiLevel = '肥胖'
   }
-  
+
   let bodyFatLevel = ''
   if (bodyFatRate > 0) {
     if (gender === 'male') {
@@ -42,7 +42,7 @@ function calculateHealthMetrics(weight: number, waist: number, height: number, g
       else bodyFatLevel = '肥胖'
     }
   }
-  
+
   let waistLevel = ''
   if (waist > 0) {
     if (gender === 'male') {
@@ -55,130 +55,112 @@ function calculateHealthMetrics(weight: number, waist: number, height: number, g
       else waistLevel = '中心型肥胖'
     }
   }
-  
+
   return { bmi, bmiLevel, bodyFatRate, bodyFatLevel, waistLevel }
 }
 
 @Injectable()
 export class UserService {
   /**
-   * 获取用户信息
+   * 获取用户信息（按当前登录用户）
    */
-  async getUserInfo() {
+  async getUserInfo(userId: string) {
     const client = getSupabaseClient()
-    
+
     const { data, error } = await client
       .from('users')
       .select('*')
-      .limit(1)
-    
+      .eq('id', userId)
+      .maybeSingle()
+
     if (error) throw new Error(`获取用户信息失败: ${error.message}`)
-    
-    return data?.[0] || null
+
+    return data || null
   }
 
   /**
-   * 更新用户信息
+   * 更新用户信息（按当前登录用户）
    */
-  async updateUserInfo(updateUserDto: UpdateUserDto) {
+  async updateUserInfo(userId: string, updateUserDto: UpdateUserDto) {
     const client = getSupabaseClient()
-    
-    // 先查询是否有用户
-    const { data: existingUsers, error: queryError } = await client
+
+    // 查询当前用户
+    const { data: currentUser, error: queryError } = await client
       .from('users')
       .select('id, current_weight, current_waist, height, gender, birth_date')
-      .limit(1)
-    
+      .eq('id', userId)
+      .maybeSingle()
+
     if (queryError) throw new Error(`查询用户失败: ${queryError.message}`)
-    
-    if (!existingUsers || existingUsers.length === 0) {
-      // 没有用户，创建新用户
-      const { data, error } = await client
-        .from('users')
-        .insert({
-          nickname: updateUserDto.nickname || '用户',
-          gender: updateUserDto.gender || 'male',
-          birth_date: updateUserDto.birth_date || '1990-01-01',
-          height: updateUserDto.height || 170,
-          target_weight: updateUserDto.target_weight || 65,
-          target_waist: updateUserDto.target_waist || 80
-        })
-        .select()
-      
-      if (error) throw new Error(`创建用户失败: ${error.message}`)
-      return data?.[0]
-    } else {
-      // 更新现有用户
-      const userId = existingUsers[0].id
-      const currentUser = existingUsers[0]
-      
-      // 合并更新后的数据
-      const updatedGender = updateUserDto.gender || currentUser.gender
-      const updatedHeight = updateUserDto.height || currentUser.height
-      const updatedBirthDate = updateUserDto.birth_date || currentUser.birth_date
-      const currentWeight = currentUser.current_weight
-      const currentWaist = currentUser.current_waist
-      
-      // 计算年龄
-      let age = 30
-      if (updatedBirthDate) {
-        const birthDate = new Date(updatedBirthDate)
-        age = new Date().getFullYear() - birthDate.getFullYear()
-      }
-      
-      // 如果有体重和腰围数据，重新计算健康指标
-      let healthMetrics = {}
-      if (currentWeight && currentWaist && updatedHeight) {
-        const metrics = calculateHealthMetrics(
-          currentWeight,
-          currentWaist,
-          updatedHeight,
-          updatedGender,
-          age
-        )
-        healthMetrics = {
-          bmi: metrics.bmi,
-          bmi_level: metrics.bmiLevel,
-          body_fat_rate: metrics.bodyFatRate,
-          body_fat_level: metrics.bodyFatLevel,
-          waist_level: metrics.waistLevel
-        }
-      }
-      
-      const { data, error } = await client
-        .from('users')
-        .update({
-          ...updateUserDto,
-          ...healthMetrics,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId)
-        .select()
-      
-      if (error) throw new Error(`更新用户失败: ${error.message}`)
-      return data?.[0]
+    if (!currentUser) throw new Error('用户不存在')
+
+    // 合并更新后的数据
+    const updatedGender = updateUserDto.gender || currentUser.gender
+    const updatedHeight = updateUserDto.height || currentUser.height
+    const updatedBirthDate = updateUserDto.birth_date || currentUser.birth_date
+    const currentWeight = currentUser.current_weight
+    const currentWaist = currentUser.current_waist
+
+    // 计算年龄
+    let age = 30
+    if (updatedBirthDate) {
+      const birthDate = new Date(updatedBirthDate)
+      age = new Date().getFullYear() - birthDate.getFullYear()
     }
+
+    // 如果有体重和腰围数据，重新计算健康指标
+    let healthMetrics = {}
+    if (currentWeight && currentWaist && updatedHeight) {
+      const metrics = calculateHealthMetrics(
+        currentWeight,
+        currentWaist,
+        updatedHeight,
+        updatedGender,
+        age
+      )
+      healthMetrics = {
+        bmi: metrics.bmi,
+        bmi_level: metrics.bmiLevel,
+        body_fat_rate: metrics.bodyFatRate,
+        body_fat_level: metrics.bodyFatLevel,
+        waist_level: metrics.waistLevel
+      }
+    }
+
+    const { data, error } = await client
+      .from('users')
+      .update({
+        ...updateUserDto,
+        ...healthMetrics,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+
+    if (error) throw new Error(`更新用户失败: ${error.message}`)
+    return data?.[0]
   }
 
   /**
-   * 初始化用户
+   * 初始化用户（按当前登录用户）
    */
-  async initUser(body: { nickname?: string; gender?: string; birth_date?: string; height?: number }) {
+  async initUser(userId: string, body: { nickname?: string; gender?: string; birth_date?: string; height?: number }) {
     const client = getSupabaseClient()
-    
+
     // 检查是否已有用户
-    const { data: existingUsers, error: queryError } = await client
+    const { data: existingUser, error: queryError } = await client
       .from('users')
       .select('id')
-      .limit(1)
-    
+      .eq('id', userId)
+      .maybeSingle()
+
     if (queryError) throw new Error(`查询用户失败: ${queryError.message}`)
-    
-    if (existingUsers && existingUsers.length > 0) {
-      return existingUsers[0]
+
+    if (existingUser) {
+      return existingUser
     }
-    
-    // 创建新用户
+
+    // 创建新用户（id 交由 Supabase 生成）
     const { data, error } = await client
       .from('users')
       .insert({
@@ -190,8 +172,27 @@ export class UserService {
         target_waist: 80
       })
       .select()
-    
+
     if (error) throw new Error(`初始化用户失败: ${error.message}`)
     return data?.[0]
+  }
+
+  /**
+   * 提交意见反馈
+   */
+  async submitFeedback(userId: string, content: string, contact?: string) {
+    const client = getSupabaseClient()
+    const { data, error } = await client
+      .from('feedback')
+      .insert({
+        user_id: userId,
+        content,
+        contact: contact || null,
+      })
+      .select()
+      .single()
+
+    if (error) throw new Error(`提交反馈失败: ${error.message}`)
+    return data
   }
 }

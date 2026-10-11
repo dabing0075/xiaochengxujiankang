@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { getSupabaseClient } from '../../storage/database/supabase-client';
 
 // 通知接口
@@ -13,16 +14,17 @@ export interface Notification {
 
 @Injectable()
 export class AdminService {
+  constructor(private readonly jwtService: JwtService) {}
+
   // 管理员登录验证
   async validateAdmin(username: string, password: string) {
-    // 简单的管理员验证（实际项目中应该使用数据库存储）
     const adminUsername = process.env.ADMIN_USERNAME || 'admin';
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
     if (username === adminUsername && password === adminPassword) {
       return {
         success: true,
-        token: Buffer.from(`${username}:${Date.now()}`).toString('base64'),
+        token: this.jwtService.sign({ role: 'admin', username }),
       };
     }
     return { success: false, message: '用户名或密码错误' };

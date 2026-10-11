@@ -4,6 +4,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import { User, Target, Calendar, Download, Info, MessageSquare, Trash2, ChevronRight, Settings, Pencil } from 'lucide-react-taro'
 import { Card, CardContent } from '@/components/ui/card'
 import { Network } from '@/network'
+import { clearToken } from '@/lib/auth'
 
 interface UserInfo {
   id: string
@@ -224,13 +225,8 @@ export default function ProfilePage() {
               content: '确定要退出登录吗？',
               success: (modalRes) => {
                 if (modalRes.confirm) {
-                  // 清除本地数据
-                  Taro.removeStorageSync('userInfo')
-                  Taro.showToast({ title: '已退出登录', icon: 'success' })
-                  // 刷新页面
-                  setTimeout(() => {
-                    fetchUserInfo()
-                  }, 1000)
+                  clearToken()
+                  Taro.reLaunch({ url: '/pages/login/index' })
                 }
               }
             })

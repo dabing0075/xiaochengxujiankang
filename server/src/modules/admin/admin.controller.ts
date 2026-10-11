@@ -1,11 +1,15 @@
-import { Controller, Post, Get, Delete, Body, Query, Param } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Query, Param, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { AdminAuthGuard } from './admin-auth.guard';
+import { Public } from '../auth/public.decorator';
 
 @Controller('admin')
+@UseGuards(AdminAuthGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   // 管理员登录
+  @Public()
   @Post('login')
   async login(@Body() body: { username: string; password: string }) {
     return this.adminService.validateAdmin(body.username, body.password);

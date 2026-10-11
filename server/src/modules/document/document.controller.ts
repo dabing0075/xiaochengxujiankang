@@ -1,10 +1,12 @@
 import { Controller, Get, Query } from '@nestjs/common'
 import { DocumentService } from './document.service'
+import { Public } from '../auth/public.decorator'
 
 @Controller('document')
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
+  @Public()
   @Get('parse')
   async parseDocument(@Query('url') url: string) {
     // 文档解析功能暂时禁用

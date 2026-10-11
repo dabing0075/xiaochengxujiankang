@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Query } from '@nestjs/common'
 import { HealthService } from './health.service'
+import { CurrentUser } from '../auth/current-user.decorator'
 
 @Controller('health')
 export class HealthController {
@@ -10,9 +11,9 @@ export class HealthController {
    * 返回当前体重、腰围、BMI、体脂率等
    */
   @Get('metrics')
-  async getMetrics() {
+  async getMetrics(@CurrentUser('userId') userId: string) {
     console.log('[HealthController] GET /api/health/metrics')
-    const data = await this.healthService.getHealthMetrics()
+    const data = await this.healthService.getHealthMetrics(userId)
     console.log('[HealthController] 返回数据:', data)
     return {
       code: 200,
@@ -26,10 +27,13 @@ export class HealthController {
    * @param days 天数，默认7天
    */
   @Get('trend')
-  async getTrend(@Query('days') days?: string) {
+  async getTrend(
+    @CurrentUser('userId') userId: string,
+    @Query('days') days?: string,
+  ) {
     const dayCount = parseInt(days || '7', 10)
     console.log(`[HealthController] GET /api/health/trend?days=${dayCount}`)
-    const data = await this.healthService.getTrendData(dayCount)
+    const data = await this.healthService.getTrendData(userId, dayCount)
     console.log('[HealthController] 返回数据:', data)
     return {
       code: 200,
@@ -43,9 +47,9 @@ export class HealthController {
    * 返回体重、腰围、BMI、体脂率的统计分析
    */
   @Get('stats')
-  async getStats() {
+  async getStats(@CurrentUser('userId') userId: string) {
     console.log('[HealthController] GET /api/health/stats')
-    const data = await this.healthService.getHealthStats()
+    const data = await this.healthService.getHealthStats(userId)
     console.log('[HealthController] 返回数据:', data)
     return {
       code: 200,
@@ -61,10 +65,12 @@ export class HealthController {
    */
   @Post('weight-plan')
   async calculateWeightPlan(
-    @Body() body: { weeklyGoal: number; activityLevel: string }
+    @CurrentUser('userId') userId: string,
+    @Body() body: { weeklyGoal: number; activityLevel: string },
   ) {
     console.log('[HealthController] POST /api/health/weight-plan', body)
     const data = await this.healthService.calculateWeightPlan(
+      userId,
       body.weeklyGoal,
       body.activityLevel
     )
@@ -81,9 +87,9 @@ export class HealthController {
    * 返回第一条记录与最新记录的对比数据
    */
   @Get('body-comparison')
-  async getBodyComparison() {
+  async getBodyComparison(@CurrentUser('userId') userId: string) {
     console.log('[HealthController] GET /api/health/body-comparison')
-    const data = await this.healthService.getBodyDataComparison()
+    const data = await this.healthService.getBodyDataComparison(userId)
     console.log('[HealthController] 返回数据:', data)
     return {
       code: 200,

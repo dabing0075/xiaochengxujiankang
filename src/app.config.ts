@@ -8,6 +8,7 @@ export default defineAppConfig({
     'pages/edit-profile/index',
     'pages/edit-target/index',
     'pages/feedback/index',
+    'pages/login/index',
   ],
   window: {
     backgroundTextStyle: 'light',

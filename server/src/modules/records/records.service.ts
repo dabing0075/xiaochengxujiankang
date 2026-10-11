@@ -3,8 +3,6 @@ import { getSupabaseClient } from '../../storage/database/supabase-client';
 
 @Injectable()
 export class RecordsService {
-  // 默认用户ID（实际项目应从JWT获取）
-  private readonly DEFAULT_USER_ID = 'f0bc3324-5b55-43e8-97fb-9f7913e7ff40';
   private supabase = getSupabaseClient();
 
   /**
@@ -59,12 +57,12 @@ export class RecordsService {
     }
   }
 
-  async checkIn(data: { date: string; weight: number; waist: number; note?: string }) {
+  async checkIn(userId: string, data: { date: string; weight: number; waist: number; note?: string }) {
     // 检查当天是否已打卡，同时检查是否是首次打卡
     const { data: existing, error: checkError } = await this.supabase
       .from('weight_records')
       .select('id')
-      .eq('user_id', this.DEFAULT_USER_ID)
+      .eq('user_id', userId)
       .eq('record_date', data.date)
       .single();
 
@@ -72,7 +70,7 @@ export class RecordsService {
     const { data: allRecords } = await this.supabase
       .from('weight_records')
       .select('id')
-      .eq('user_id', this.DEFAULT_USER_ID)
+      .eq('user_id', userId)
       .limit(1);
     const isFirstCheckin = !allRecords || allRecords.length === 0;
 
@@ -101,7 +99,7 @@ export class RecordsService {
       }
 
       // 更新用户健康指标（不是首次打卡）
-      await this.updateUserHealthMetrics(data.weight, data.waist, data.date, false);
+      await this.updateUserHealthMetrics(userId, data.weight, data.waist, data.date, false);
 
       console.log('[RecordsService] 更新记录成功', updated);
       return { code: 200, msg: '记录已更新', data: updated };
@@ -111,7 +109,7 @@ export class RecordsService {
     const { data: newRecord, error: insertError } = await this.supabase
       .from('weight_records')
       .insert({
-        user_id: this.DEFAULT_USER_ID,
+        user_id: userId,
         record_date: data.date,
         weight: data.weight,
         waist: data.waist,
@@ -126,7 +124,7 @@ export class RecordsService {
     }
 
     // 更新用户健康指标（首次打卡时设置初始体重）
-    await this.updateUserHealthMetrics(data.weight, data.waist, data.date, isFirstCheckin);
+    await this.updateUserHealthMetrics(userId, data.weight, data.waist, data.date, isFirstCheckin);
 
     console.log('[RecordsService] 创建记录成功', newRecord);
     return { code: 200, msg: '打卡成功', data: newRecord };
@@ -135,13 +133,13 @@ export class RecordsService {
   /**
    * 更新用户健康指标
    */
-  private async updateUserHealthMetrics(weight: number, waist: number, date: string, isFirstCheckin: boolean = false) {
+  private async updateUserHealthMetrics(userId: string, weight: number, waist: number, date: string, isFirstCheckin: boolean = false) {
     try {
       // 获取用户信息
       const { data: user, error: userError } = await this.supabase
         .from('users')
         .select('height, gender, birth_date')
-        .eq('id', this.DEFAULT_USER_ID)
+        .eq('id', userId)
         .single();
 
       if (userError || !user) {
@@ -151,7 +149,7 @@ export class RecordsService {
 
       const height = Number(user.height); // 身高单位：厘米
       const gender = user.gender || 'male';
-      
+
       // 计算年龄
       const birthDate = new Date(user.birth_date);
       const today = new Date();
@@ -187,7 +185,7 @@ export class RecordsService {
       const { error: updateError } = await this.supabase
         .from('users')
         .update(updateData)
-        .eq('id', this.DEFAULT_USER_ID);
+        .eq('id', userId);
 
       if (updateError) {
         console.error('[RecordsService] 更新用户健康指标失败', updateError);
@@ -201,7 +199,7 @@ export class RecordsService {
     }
   }
 
-  async getRecentRecords(days: number) {
+  async getRecentRecords(userId: string, days: number) {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days + 1);
@@ -209,7 +207,7 @@ export class RecordsService {
     const { data, error } = await this.supabase
       .from('weight_records')
       .select('*')
-      .eq('user_id', this.DEFAULT_USER_ID)
+      .eq('user_id', userId)
       .gte('record_date', startDate.toISOString().split('T')[0])
       .lte('record_date', endDate.toISOString().split('T')[0])
       .order('record_date', { ascending: false });
@@ -223,11 +221,11 @@ export class RecordsService {
     return { code: 200, msg: 'success', data };
   }
 
-  async getRecordByDate(date: string) {
+  async getRecordByDate(userId: string, date: string) {
     const { data, error } = await this.supabase
       .from('weight_records')
       .select('*')
-      .eq('user_id', this.DEFAULT_USER_ID)
+      .eq('user_id', userId)
       .eq('record_date', date)
       .single();
 
@@ -245,11 +243,11 @@ export class RecordsService {
     return { code: 200, msg: 'success', data };
   }
 
-  async getHistory(startDate?: string, endDate?: string) {
+  async getHistory(userId: string, startDate?: string, endDate?: string) {
     let query = this.supabase
       .from('weight_records')
       .select('*')
-      .eq('user_id', this.DEFAULT_USER_ID);
+      .eq('user_id', userId);
 
     if (startDate) {
       query = query.gte('record_date', startDate);
@@ -269,12 +267,12 @@ export class RecordsService {
     return { code: 200, msg: 'success', data };
   }
 
-  async getCheckinStats() {
+  async getCheckinStats(userId: string) {
     // 获取所有记录
     const { data: records, error } = await this.supabase
       .from('weight_records')
       .select('record_date')
-      .eq('user_id', this.DEFAULT_USER_ID)
+      .eq('user_id', userId)
       .order('record_date', { ascending: false });
 
     if (error) {
@@ -289,14 +287,14 @@ export class RecordsService {
     if (records && records.length > 0) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       for (let i = 0; i < records.length; i++) {
         const recordDate = new Date(records[i].record_date);
         recordDate.setHours(0, 0, 0, 0);
-        
+
         const expectedDate = new Date(today);
         expectedDate.setDate(expectedDate.getDate() - i);
-        
+
         if (recordDate.getTime() === expectedDate.getTime()) {
           continuousDays++;
         } else {
@@ -322,11 +320,11 @@ export class RecordsService {
     };
   }
 
-  async exportAllRecords() {
+  async exportAllRecords(userId: string) {
     const { data, error } = await this.supabase
       .from('weight_records')
       .select('*')
-      .eq('user_id', this.DEFAULT_USER_ID)
+      .eq('user_id', userId)
       .order('record_date', { ascending: false });
 
     if (error) {

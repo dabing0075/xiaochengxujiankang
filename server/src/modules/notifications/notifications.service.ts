@@ -17,10 +17,9 @@ export class NotificationsService {
   /**
    * 获取用户通知列表（全局通知 + 个人通知）
    */
-  async getUserNotifications(userId?: string) {
+  async getUserNotifications(userId: string) {
     const client = getSupabaseClient()
-    const effectiveUserId = userId || 'default-user'
-    const readSet = getUserReadSet(effectiveUserId)
+    const readSet = getUserReadSet(userId)
 
     // 从数据库获取全局通知
     const { data: globalData, error: globalError } = await client
@@ -42,34 +41,32 @@ export class NotificationsService {
       read: readSet.has(n.id),
     }))
 
-    // 如果有用户ID，获取用户个人通知
+    // 获取用户个人通知
     let personalNotifs: any[] = []
-    if (userId) {
-      const { data: userData, error: userError } = await client
-        .from('user_notifications')
-        .select(`
-          id,
-          is_read,
-          created_at,
-          notification:global_notifications(id, title, content, type)
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
+    const { data: userData, error: userError } = await client
+      .from('user_notifications')
+      .select(`
+        id,
+        is_read,
+        created_at,
+        notification:global_notifications(id, title, content, type)
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
 
-      if (userError) {
-        console.error('获取用户通知失败:', userError)
-      }
+    if (userError) {
+      console.error('获取用户通知失败:', userError)
+    }
 
-      if (userData) {
-        personalNotifs = userData.map((n: any) => ({
-          id: n.id,
-          type: n.notification?.type || 'system',
-          title: n.notification?.title || '',
-          content: n.notification?.content || '',
-          date: n.created_at.split('T')[0],
-          read: n.is_read,
-        }))
-      }
+    if (userData) {
+      personalNotifs = userData.map((n: any) => ({
+        id: n.id,
+        type: n.notification?.type || 'system',
+        title: n.notification?.title || '',
+        content: n.notification?.content || '',
+        date: n.created_at.split('T')[0],
+        read: n.is_read,
+      }))
     }
 
     // 合并并按时间排序
@@ -82,12 +79,11 @@ export class NotificationsService {
   /**
    * 标记通知为已读
    */
-  async markAsRead(notificationId: string, userId?: string) {
+  async markAsRead(notificationId: string, userId: string) {
     const client = getSupabaseClient()
-    const effectiveUserId = userId || 'default-user'
-    
+
     // 更新内存中的已读记录
-    const readSet = getUserReadSet(effectiveUserId)
+    const readSet = getUserReadSet(userId)
     readSet.add(notificationId)
 
     // 更新数据库中的用户通知已读状态
@@ -95,7 +91,7 @@ export class NotificationsService {
       .from('user_notifications')
       .update({ is_read: true, read_at: new Date().toISOString() })
       .eq('notification_id', notificationId)
-      .eq('user_id', effectiveUserId)
+      .eq('user_id', userId)
 
     if (error) {
       console.log('更新用户通知已读状态:', error)
@@ -107,7 +103,7 @@ export class NotificationsService {
   /**
    * 获取未读通知数量
    */
-  async getUnreadCount(userId?: string): Promise<number> {
+  async getUnreadCount(userId: string): Promise<number> {
     const notifications = await this.getUserNotifications(userId)
     return notifications.filter(n => !n.read).length
   }

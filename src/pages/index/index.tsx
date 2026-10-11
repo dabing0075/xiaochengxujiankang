@@ -2,6 +2,7 @@ import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { useEffect, useState } from 'react'
 import { Network } from '@/network'
+import { isLoggedIn } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -106,6 +107,11 @@ export default function HomePage() {
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
+    // 未登录则跳转登录页
+    if (!isLoggedIn()) {
+      Taro.reLaunch({ url: '/pages/login/index' })
+      return
+    }
     loadData()
     loadUnreadCount()
     
@@ -170,6 +176,7 @@ export default function HomePage() {
   }
 
   const loadData = async () => {
+    if (!isLoggedIn()) return
     try {
       // 获取用户信息
       const userRes = await Network.request({
@@ -211,6 +218,7 @@ export default function HomePage() {
 
   // 加载未读通知数量
   const loadUnreadCount = async () => {
+    if (!isLoggedIn()) return
     try {
       const res = await Network.request({
         url: '/api/notifications',

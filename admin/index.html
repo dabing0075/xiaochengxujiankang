@@ -284,6 +284,18 @@
     let currentPage = 1;
     let customersPageSize = 10;
 
+    // 带鉴权头的请求封装：自动附加 admin token，401 时登出
+    async function authFetch(url, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401) {
+        logout();
+        throw new Error('unauthorized');
+      }
+      return res;
+    }
+
     // 登录
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -349,7 +361,7 @@
     // 加载统计数据
     async function loadStatistics() {
       try {
-        const res = await fetch(`${API_BASE}/statistics`);
+        const res = await authFetch(`${API_BASE}/statistics`);
         const result = await res.json();
         const data = result.data;
 
@@ -369,7 +381,7 @@
     // 加载排行榜
     async function loadRanking() {
       try {
-        const res = await fetch(`${API_BASE}/ranking?limit=10`);
+        const res = await authFetch(`${API_BASE}/ranking?limit=10`);
         const result = await res.json();
         const data = result.data;
 
@@ -487,7 +499,7 @@
       const sortOrder = document.getElementById('sortOrder').value;
 
       try {
-        const res = await fetch(`${API_BASE}/customers?page=${currentPage}&pageSize=${customersPageSize}&sortBy=${sortBy}&sortOrder=${sortOrder}`);
+        const res = await authFetch(`${API_BASE}/customers?page=${currentPage}&pageSize=${customersPageSize}&sortBy=${sortBy}&sortOrder=${sortOrder}`);
         const data = await res.json();
 
         const tbody = document.getElementById('customersTable');
@@ -559,7 +571,7 @@
     // 查看客户详情
     async function viewCustomerDetail(userId) {
       try {
-        const res = await fetch(`${API_BASE}/customers/${userId}`);
+        const res = await authFetch(`${API_BASE}/customers/${userId}`);
         const result = await res.json();
         const data = result.data;
 
@@ -642,7 +654,7 @@
     // 加载通知列表
     async function loadNotifications() {
       try {
-        const res = await fetch(`${API_BASE}/notifications`);
+        const res = await authFetch(`${API_BASE}/notifications`);
         const data = await res.json();
 
         const tbody = document.getElementById('notificationsTable');
@@ -680,7 +692,7 @@
     // 加载用户列表用于选择
     async function loadUsersForSelect() {
       try {
-        const res = await fetch(`${API_BASE}/users`);
+        const res = await authFetch(`${API_BASE}/users`);
         const result = await res.json();
         const data = result.data;
 
@@ -731,7 +743,7 @@
       }
 
       try {
-        const res = await fetch(`${API_BASE}/notifications`, {
+        const res = await authFetch(`${API_BASE}/notifications`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title, content, type, targetUsers })
@@ -755,7 +767,7 @@
       if (!confirm('确定要删除这条通知吗？')) return;
 
       try {
-        const res = await fetch(`${API_BASE}/notifications/${id}`, { method: 'DELETE' });
+        const res = await authFetch(`${API_BASE}/notifications/${id}`, { method: 'DELETE' });
         const data = await res.json();
 
         if (data.success) {
