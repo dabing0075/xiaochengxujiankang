@@ -348,18 +348,29 @@ export class AdminService {
       return { success: false, message: '创建通知失败' };
     }
 
-    // 如果指定了目标用户，为每个用户创建关联记录
-    if (targetUsers && targetUsers.length > 0 && data) {
-      const userNotificationData = targetUsers.map(userId => ({
+    // 确定接收者：未指定目标用户则广播给所有用户
+    let recipients: string[] = [];
+    if (targetUsers && targetUsers.length > 0) {
+      recipients = targetUsers;
+    } else {
+      const { data: allUsers } = await client
+        .from('users')
+        .select('id');
+      recipients = (allUsers || []).map((u: any) => u.id);
+    }
+
+    // 为每个接收者创建 user_notifications 关联，保证 App 与小程序都能读到
+    if (data && recipients.length > 0) {
+      const userNotificationData = recipients.map(userId => ({
         user_id: userId,
         notification_id: data.id,
         is_read: false,
       }));
-      
+
       const { error: userError } = await client
         .from('user_notifications')
         .insert(userNotificationData);
-      
+
       if (userError) {
         console.error('创建用户通知关联失败:', userError);
       }

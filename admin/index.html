@@ -59,6 +59,7 @@
           <span class="text-xl font-bold text-gray-800">靓健体重日志 - 管理后台</span>
         </div>
         <div class="flex items-center gap-4">
+          <span id="refreshStatus" class="text-xs text-gray-400"><i class="fas fa-sync-alt mr-1"></i>每 10 秒自动刷新</span>
           <span class="text-gray-600">管理员</span>
           <button onclick="logout()" class="text-gray-500 hover:text-red-500">
             <i class="fas fa-sign-out-alt"></i> 退出
@@ -283,6 +284,8 @@
     let token = null;
     let currentPage = 1;
     let customersPageSize = 10;
+    let currentSection = 'dashboard';
+    let refreshTimer = null;
 
     // 带鉴权头的请求封装：自动附加 admin token，401 时登出
     async function authFetch(url, options = {}) {
@@ -326,12 +329,13 @@
     function showMainPage() {
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('mainPage').classList.remove('hidden');
-      loadStatistics();
-      loadRanking();
+      refreshCurrentSection();
+      startAutoRefresh();
     }
 
     // 退出登录
     function logout() {
+      stopAutoRefresh();
       token = null;
       localStorage.removeItem('adminToken');
       document.getElementById('mainPage').classList.add('hidden');
@@ -340,21 +344,53 @@
 
     // 切换侧边栏
     function showSection(sectionId) {
+      currentSection = sectionId;
       document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
       document.getElementById(sectionId).classList.remove('hidden');
       document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
       event.target.closest('.sidebar-item').classList.add('active');
 
-      if (sectionId === 'dashboard') {
-        loadStatistics();
-        loadRanking();
-      } else if (sectionId === 'customers') {
-        loadCustomers();
-      } else if (sectionId === 'ranking') {
-        loadRanking();
-      } else if (sectionId === 'notifications') {
-        loadNotifications();
+      // 用户选择列表仅在切到通知管理时加载一次，轮询时不重复请求
+      if (sectionId === 'notifications') {
         loadUsersForSelect();
+      }
+      refreshCurrentSection();
+    }
+
+    // 刷新当前可见区块的数据（登录时与定时自动刷新共用）
+    async function refreshCurrentSection() {
+      if (currentSection === 'dashboard') {
+        await loadStatistics();
+        await loadRanking();
+      } else if (currentSection === 'customers') {
+        await loadCustomers();
+      } else if (currentSection === 'ranking') {
+        await loadRanking();
+      } else if (currentSection === 'notifications') {
+        await loadNotifications();
+      }
+      updateRefreshStatus();
+    }
+
+    function updateRefreshStatus() {
+      const el = document.getElementById('refreshStatus');
+      if (el) el.innerHTML = '<i class="fas fa-sync-alt mr-1"></i>已更新 ' + new Date().toLocaleTimeString('zh-CN');
+    }
+
+    function startAutoRefresh() {
+      if (refreshTimer) return;
+      refreshTimer = setInterval(() => {
+        const main = document.getElementById('mainPage');
+        if (main && !main.classList.contains('hidden')) {
+          refreshCurrentSection();
+        }
+      }, 10000);
+    }
+
+    function stopAutoRefresh() {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
       }
     }
 

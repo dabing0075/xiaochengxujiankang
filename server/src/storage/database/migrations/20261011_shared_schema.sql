@@ -21,6 +21,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS initial_weight numeric(5,1);
 
 -- 3) 手机号唯一索引（Postgres 唯一索引对 NULL 不冲突，可安全创建）
 CREATE UNIQUE INDEX IF NOT EXISTS users_phone_idx ON users(phone);
+-- 微信 openid 唯一索引（未绑定微信的用户为 NULL，同样不冲突）
+CREATE UNIQUE INDEX IF NOT EXISTS users_openid_idx ON users(openid);
 
 -- 4) 意见反馈表
 CREATE TABLE IF NOT EXISTS feedback (

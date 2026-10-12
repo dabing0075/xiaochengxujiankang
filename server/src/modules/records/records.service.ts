@@ -147,7 +147,7 @@ export class RecordsService {
         return;
       }
 
-      const height = Number(user.height); // 身高单位：厘米
+      const height = Number(user.height) || 170; // 身高单位：厘米（未填写时默认 170，与 App 保持一致）
       const gender = user.gender || 'male';
 
       // 计算年龄

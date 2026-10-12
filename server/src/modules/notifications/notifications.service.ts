@@ -1,49 +1,17 @@
 import { Injectable } from '@nestjs/common'
 import { getSupabaseClient } from '../../storage/database/supabase-client'
 
-// 用户已读通知记录（内存缓存，用于快速判断已读状态）
-const userReadNotifications: Record<string, Set<string>> = {}
-
-// 获取用户已读记录
-function getUserReadSet(userId: string): Set<string> {
-  if (!userReadNotifications[userId]) {
-    userReadNotifications[userId] = new Set<string>()
-  }
-  return userReadNotifications[userId]
-}
-
 @Injectable()
 export class NotificationsService {
   /**
-   * 获取用户通知列表（全局通知 + 个人通知）
+   * 获取用户通知列表。
+   * 以 user_notifications 为唯一事实源：后台发通知（广播/定向）都会 fan-out 到
+   * user_notifications，App 与小程序读取同一套数据、结果一致。
    */
   async getUserNotifications(userId: string) {
     const client = getSupabaseClient()
-    const readSet = getUserReadSet(userId)
 
-    // 从数据库获取全局通知
-    const { data: globalData, error: globalError } = await client
-      .from('global_notifications')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (globalError) {
-      console.error('获取全局通知失败:', globalError)
-    }
-
-    // 格式化全局通知
-    const globalNotifs = (globalData || []).map(n => ({
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      content: n.content,
-      date: n.created_at.split('T')[0],
-      read: readSet.has(n.id),
-    }))
-
-    // 获取用户个人通知
-    let personalNotifs: any[] = []
-    const { data: userData, error: userError } = await client
+    const { data, error } = await client
       .from('user_notifications')
       .select(`
         id,
@@ -54,43 +22,31 @@ export class NotificationsService {
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
-    if (userError) {
-      console.error('获取用户通知失败:', userError)
+    if (error) {
+      console.error('获取用户通知失败:', error)
+      return []
     }
 
-    if (userData) {
-      personalNotifs = userData.map((n: any) => ({
-        id: n.id,
-        type: n.notification?.type || 'system',
-        title: n.notification?.title || '',
-        content: n.notification?.content || '',
-        date: n.created_at.split('T')[0],
-        read: n.is_read,
-      }))
-    }
-
-    // 合并并按时间排序
-    const allNotifications = [...globalNotifs, ...personalNotifs]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-
-    return allNotifications
+    return (data || []).map((n: any) => ({
+      id: n.id,
+      type: n.notification?.type || 'system',
+      title: n.notification?.title || '',
+      content: n.notification?.content || '',
+      date: (n.created_at || '').split('T')[0],
+      read: !!n.is_read,
+    }))
   }
 
   /**
-   * 标记通知为已读
+   * 标记通知为已读（notificationId 为 user_notifications.id）
    */
   async markAsRead(notificationId: string, userId: string) {
     const client = getSupabaseClient()
 
-    // 更新内存中的已读记录
-    const readSet = getUserReadSet(userId)
-    readSet.add(notificationId)
-
-    // 更新数据库中的用户通知已读状态
     const { error } = await client
       .from('user_notifications')
       .update({ is_read: true, read_at: new Date().toISOString() })
-      .eq('notification_id', notificationId)
+      .eq('id', notificationId)
       .eq('user_id', userId)
 
     if (error) {
